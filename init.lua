@@ -6,9 +6,74 @@ local customBarText = aura_env.config.customBarText
 local spellName, _ ,iconFileId = GetSpellInfo(tostring(targetSpellId))
 
 
+-- SpellCd Object for keeping track of config items
+local SpellCd = {}
+SpellCd.__index = SpellCd
+function SpellCd:new(active, npcIdTable, spellId, cdFromCombatStart, cdAfterCast, spellEventType, iconOverrideBool, iconOverride, customBarTextBool, customBarText, tank, healer, melee, ranged)
+    local instance = setmetatable({}, SpellCd)
+    instance.active = active
+    instance.npcIdTable = npcIdTable
+    instance.spellId = spellId
+    instance.cdFromCombatStart = cdFromCombatStart
+    instance.cdAfterCast = cdAfterCast
+    instance.spellEventType = spellEventType
+    instance.iconOverrideBool = iconOverrideBool
+    instance.iconOverride = iconOverride
+    instance.customBarBool = customBarTextBool
+    instance.customBarText = customBarText
+    instance.tank = tank
+    instance.healer = healer
+    instance.melee = melee
+    instance.ranged = ranged
+    return instance
+end
+
+function SpellCd:fromConfigEntry(configEntry)
+    local newSpellCdObjects = {}
+    local spellIds = string.gmatch(configEntry.spellIds, "%d+")
+    local npcIds = string.gmatch(configEntry.npcIds, "%d+")
+
+    for _, spellId in pairs(spellIds) do
+        local newSpellCd = SpellCD:new(
+            configEntry.active,
+            npcIds,
+            spellId,
+            configEntry.cdFromCombatStart,
+            configEntry.cdAfterCast,
+            configEntry.spellEventType,
+            configEntry.iconOverrideBool,
+            configEntry.iconOverrideSpellId,
+            configEntry.customBarTextBool,
+            configEntry.customBarText,
+            configEntry.tank,
+            configEntry.healer,
+            configEntry.ranged,
+            configEntry.melee
+            
+        )
+        table.insert(newSpellCdObjects, newSpellCd)
+    end
+    return newSpellCdObjects
+end
+
+aura_env.getSpellCdList = function()
+    local spellCdList = {}
+    for _, spellConfig in pairs(aura_env.config.spell) do
+        local newSpellCdObjects = SpellCd:fromConfigEntry(spellConfig)
+        for _, spellCdObject in newSpellCdObjects do
+            local spellId = spellConfig.spellId
+            table.insert(aura_env.spellCdList, spellId, spellCdObject)
+        end
+    end
+    return spellCdList
+end
+
 
 aura_env.activeBars = {}
 aura_env.lastUpdate = 0
+
+-- Spell CD Object
+
 
 aura_env.addBar = function(duration, guid, ...)
     aura_env.activeBars[guid] = true
