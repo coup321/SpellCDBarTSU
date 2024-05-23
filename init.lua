@@ -1,77 +1,98 @@
 local EntryInfo = {}
 EntryInfo.__index = EntryInfo
-function EntryInfo:new(active, npcIdTable, spellId, cdFromCombatStart, cdAfterCast, spellEventType, iconOverrideBool, iconOverride, customBarTextBool, customBarText, tank, healer, melee, ranged)
+function EntryInfo:new(config)
     local instance = setmetatable({}, EntryInfo)
-    instance.active = active
-    instance.npcIdTable = npcIdTable
-    instance.spellId = spellId
-    instance.cdFromCombatStart = cdFromCombatStart
-    instance.cdAfterCast = cdAfterCast
-    instance.spellEventType = spellEventType
-    instance.iconOverrideBool = iconOverrideBool
-    instance.iconOverride = iconOverride
-    instance.customBarBool = customBarTextBool
-    instance.customBarText = customBarText
-    instance.tank = tank
-    instance.healer = healer
-    instance.melee = melee
-    instance.ranged = ranged
+    instance.config = config
     return instance
 end
 
-function EntryInfo:fromConfigEntry(configEntry)
-    local newSpellCdObjects = {}
-    local spellIds = string.gmatch(configEntry.spellIds, "%d+")
-    local npcIds = string.gmatch(configEntry.npcIds, "%d+")
-
-    for _, spellId in pairs(spellIds) do
-        local newSpellCd = SpellCD:new(
-            configEntry.active,
-            npcIds,
-            tonumber(spellId),
-            configEntry.cdFromCombatStart,
-            configEntry.cdAfterCast,
-            configEntry.spellEventType,
-            configEntry.iconOverrideBool,
-            configEntry.iconOverrideSpellId,
-            configEntry.customBarTextBool,
-            configEntry.customBarText,
-            configEntry.tank,
-            configEntry.healer,
-            configEntry.ranged,
-            configEntry.melee
-            
-        )
-        table.insert(newSpellCdObjects, newSpellCd)
-    end
-    return newSpellCdObjects
+function EntryInfo:isActive()
+    return self.config.active
 end
 
-
-aura_env.getSpellCdList = function()
-    local spellCdList = {}
-    for _, spellConfig in pairs(aura_env.config.spell) do
-        local newSpellCdObjects = EntryInfo:fromConfigEntry(spellConfig)
-        for _, spellCdObject in newSpellCdObjects do
-            local spellId = spellConfig.spellId
-            table.insert(aura_env.spellCdList, spellId, spellCdObject)
+function EntryInfo:containsNpc(npcIdToCheck)
+    local npcIds = string.gmatch(self.config.npcIds, "%d+")
+    for id in npcIds do
+        if id == tostring(npcIdToCheck) then
+            return true
         end
     end
-    return spellCdList
+    return false
 end
 
-aura_env.trackedSpells = aura_env.getSpellCdList()
+function EntryInfo:spellInfo()
+    local info = {}
+    info["spellId"] = tonumber(self.config.spellId)
+    info["cdFromCombatStart"] = tonumber(self.config.cdFromCombatStart)
+    info["cdAfterCast"] = tonumber(self.config.cdAfterCast)
+    info["spellEventType"] = self.config.spellEventType
+    return info
+end
+
+
+function EntryInfo:spellId()
+    return self.config.spellId
+end
+
+function EntryInfo:barInfo()
+    local spellId = tonumber(self.config.spellId)
+    local spellName, _, icon = GetSpellInfo(spellId)
+    local info = {}
+    info["icon"] = self.config.iconOverrideBool and self.config.iconOverrideSpellId or icon
+    info["text"] = self.config.customBarTextBool and self.config.customBarText or spellName
+    info["category"] = self.config.category
+    return info
+end
+
+function EntryInfo:roleInfo()
+    local info = {}
+    info["tank"] = self.config.tank
+    info["healer"] = self.config.healer
+    info["ranged"] = self.config.ranged
+    info["melee"] = self.config.melee
+    return info
+end
+
+
+function EntryInfo:allowCdFromStartOfCombat()
+    return self.config.allowCdFromStartOfCombat
+end
+
+
+function EntryInfo:useSpellCastStart()
+    return self.config.spellEventType == 1 -- "SPELL_CAST_START"
+
+end
+
+function EntryInfo:useUnitSpellcastSucceeded()
+    return self.config.spellEventType == 2 -- UNIT_SPELLCAST_SUCCEEDED
+end
+
+
+local function parseEntries()
+    local entries = {}
+    for _, entryConfig in pairs(aura_env.config.spells) do
+        local spellId = entryConfig.spellId
+        if #spellId > 0 then
+            entries[tonumber(spellId)] = EntryInfo:new(entryConfig)
+        end
+    end  
+    return entries
+end
+
+aura_env.entries = parseEntries()
 aura_env.activeBars = {}
 aura_env.lastUpdate = 0
 
--- Spell CD Object
 
+aura_env.addBar = function(barInfo, spellId, duration, guid, isActive)
+    if not isActive then
+        return {}
+    end
 
-aura_env.addBar = function(spellCd, duration, guid, ...)
-    aura_env.activeBars[guid] = true
+    aura_env.activeBars[guid..spellId] = true
     local unit = UnitTokenFromGUID(guid)
     local mark = unit and GetRaidTargetIndex(unit) or nil
-    local spellName = GetSpellInfo(spellCd.spellId)
 
     local newState = {
         show = true,
@@ -80,9 +101,11 @@ aura_env.addBar = function(spellCd, duration, guid, ...)
         progressType = "timed",
         duration = duration,
         expirationTime = GetTime() + duration,
-        name = spellCd.customBarTextBool and spellCd.customBarText or spellName,
+        name = barInfo.text,
+        icon = barInfo.icon,
         mark = (mark and ICON_LIST[mark].."16|t") or "",
-        icon = iconFileId
+        category = barInfo.category,
+        guid = guid
     }
 
     return newState
@@ -92,11 +115,19 @@ end
 aura_env.handleSpellCastStart = function(...)
     local spellId = select(13, ...)
     local sourceGuid = select(5, ...)
-    if aura_env.trackedSpells[spellId] then
-        local spellCd = aura_env.trackedSpells[spellId]
-        local duration = spellCd.cdAfterCast
-        local newStates = aura_env.addBar(spellCd, duration, sourceGuid)
-        return newStates
+    if aura_env.entries[spellId] then
+        local entry = aura_env.entries[spellId]
+
+        if not entry:useSpellCastStart() then
+            return nil
+        end
+
+        local isActive = entry:isActive()
+        local spellInfo = entry:spellInfo()
+        local barInfo = entry:barInfo()
+        local duration = spellInfo.cdAfterCast
+        local newState = aura_env.addBar(barInfo, spellId, duration, sourceGuid, isActive)
+        return newState
     end
     return nil
 end
@@ -105,11 +136,19 @@ aura_env.handleUnitSpellcastSucceeded = function(...)
     local unit = select(2, ...)
     local spellId = select(4, ...)
     local sourceGuid = UnitGUID(unit)
-    if aura_env.trackedSpells[spellId] then
-        local spellCd = aura_env.trackedSpells[spellId]
-        local duration = spellCd.cdAfterCast
-        local newStates = aura_env.addBar(spellCd, duration, sourceGuid)
-        return newStates
+    if aura_env.entries[spellId] then
+        local entry = aura_env.entries[spellId]
+
+        if not entry:useUnitSpellcastSucceeded() then
+            return nil
+        end
+
+        local isActive = entry:isActive()
+        local spellInfo = entry:spellInfo()
+        local barInfo = entry:barInfo()
+        local duration = spellInfo.cdAfterCast
+        local newState = aura_env.addBar(barInfo, spellId, duration, sourceGuid, isActive)
+        return newState
     end
     return nil
 end
@@ -119,42 +158,35 @@ aura_env.handleFrameUpdate = function()
     local newStates = {}
     if (currentTime - aura_env.lastUpdate) > 0.5 then
         aura_env.last_update = currentTime
-        for _, spellCd in pairs(aura_env.trackedSpells) do
-            local guid, newState = aura_env.updateFromNameplates(spellCd)
-                if guid and newState then
-                    newStates[guid] = newState
-                end
+        for spellId, entry in pairs(aura_env.entries) do
+            local guid, newState = aura_env.updateFromNameplates(entry, spellId)
+            if guid and newState and entry:allowCdFromStartOfCombat() then
+                newStates[guid..spellId] = newState
+            end
         end
     end
     return newStates
 end
-aura_env.updateFromNameplates = function(spellCd)
-    for _, plate in pairs(C_NamePlate.GetNamePlates()) do
-        local unit = plate.namePlateUnitToken
+aura_env.updateFromNameplates = function(entry, spellId)
+    for _, nameplate in pairs(C_NamePlate.GetNamePlates()) do
+        local unit = nameplate.namePlateUnitToken
         local guid = UnitGUID(unit)
         local npcId = select(6, strsplit("-", guid))
         local isInCombat = UnitAffectingCombat(unit)
-        local barDoesNOTExist = aura_env.activeBars[guid] == nil
-        local npcIdIsInTargetIds = aura_env.getNpcIdMatchBool(npcId, spellCd)
+        local barDoesNOTExist = aura_env.activeBars[guid..spellId] == nil
+        local npcIdIsInTargetIds = entry:containsNpc(npcId) 
 
         if guid and npcId and npcIdIsInTargetIds and isInCombat and barDoesNOTExist then
-            local newState = aura_env.addBar(targetCdFromCombatStart, guid)
+            local barInfo = entry:barInfo()
+            local spellInfo = entry:spellInfo()
+            local duration = spellInfo.cdFromCombatStart
+            local isActive = entry:isActive()
+            local newState = aura_env.addBar(barInfo, spellId, duration, guid, isActive)
             return guid, newState
         end
     end
     return nil
 end
-
-aura_env.getNpcIdMatchBool = function(idToMatch, spellCd)
-    local ids = spellCds.npcIdTable
-    for _, id in pairs(ids) do
-        if id == idToMatch then
-            return true
-        end
-    end
-    return false
-end
-
 
 aura_env.printEvents =  function(...)
     local args = {...}  -- Put all variable arguments into a table
