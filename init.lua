@@ -35,10 +35,11 @@ function EntryInfo:spellId()
 end
 
 function EntryInfo:barInfo()
-    local spellId = tonumber(self.config.spellId)
-    local spellName, _, icon = GetSpellInfo(spellId)
+    local iconSpellId = self.config.iconOverrideBool and tonumber(self.config.iconOverrideSpellId) or tonumber(self.config.spellId)
+    local spellName, _, _ = GetSpellInfo(self.config.spellId)
+    local _, _, icon = GetSpellInfo(iconSpellId)
     local info = {}
-    info["icon"] = self.config.iconOverrideBool and self.config.iconOverrideSpellId or icon
+    info["icon"] = icon
     info["text"] = self.config.customBarTextBool and self.config.customBarText or spellName
     info["category"] = self.config.category
     return info
@@ -69,6 +70,21 @@ function EntryInfo:useUnitSpellcastSucceeded()
 end
 
 
+function EntryInfo:roleOptions()
+    return {
+        ["TANK"] = self.config.tank,
+        ["HEALER"] = self.config.healer,
+        ["MELEE"] = self.config.melee,
+        ["RANGED"] = self.config.ranged,
+    }
+end
+
+function EntryInfo:showBarForPlayerRole()
+    local roleOptions = self:roleOptions()
+    local _, playerRole = WeakAuras.SpecRolePositionForUnit("player")
+    return roleOptions[playerRole]
+end
+
 local function parseEntries()
     local entries = {}
     for _, entryConfig in pairs(aura_env.config.spells) do
@@ -85,8 +101,8 @@ aura_env.activeBars = {}
 aura_env.lastUpdate = 0
 
 
-aura_env.addBar = function(barInfo, spellId, duration, guid, isActive)
-    if not isActive then
+aura_env.addBar = function(barInfo, spellId, duration, guid, isActive, entry)
+    if not isActive or not entry:showBarForPlayerRole() then
         return {}
     end
 
@@ -126,7 +142,7 @@ aura_env.handleSpellCastStart = function(...)
         local spellInfo = entry:spellInfo()
         local barInfo = entry:barInfo()
         local duration = spellInfo.cdAfterCast
-        local newState = aura_env.addBar(barInfo, spellId, duration, sourceGuid, isActive)
+        local newState = aura_env.addBar(barInfo, spellId, duration, sourceGuid, isActive, entry)
         return newState
     end
     return nil
@@ -147,7 +163,7 @@ aura_env.handleUnitSpellcastSucceeded = function(...)
         local spellInfo = entry:spellInfo()
         local barInfo = entry:barInfo()
         local duration = spellInfo.cdAfterCast
-        local newState = aura_env.addBar(barInfo, spellId, duration, sourceGuid, isActive)
+        local newState = aura_env.addBar(barInfo, spellId, duration, sourceGuid, isActive, entry)
         return newState
     end
     return nil
@@ -181,7 +197,7 @@ aura_env.updateFromNameplates = function(entry, spellId)
             local spellInfo = entry:spellInfo()
             local duration = spellInfo.cdFromCombatStart
             local isActive = entry:isActive()
-            local newState = aura_env.addBar(barInfo, spellId, duration, guid, isActive)
+            local newState = aura_env.addBar(barInfo, spellId, duration, guid, isActive, entry)
             return guid, newState
         end
     end
