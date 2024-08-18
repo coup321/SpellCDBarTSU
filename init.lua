@@ -1,26 +1,3 @@
-
-local new_table = {
-["ranged"] = true ,
-["tank"] = true ,
-["spellId"] = 396812 ,
-["active"] = true ,
-["allowCdFromStartOfCombat"] = true ,
-["customBarTextBool"] = true ,
-["spellEventType"] = 1 ,
-["category"] = 3 ,
-["cdFromCombatStart"] = 3.7 ,
-["customBarText"] = "AoE Inc" ,
-["melee"] = true ,
-["cdAfterCast"] = 23 ,
-["iconOverrideBool"] = false ,
-["healer"] = true ,
-["npcIds"] = 196576 ,
-["description"] = "testme_daddy",
-["iconOverrideSpellId"] = 0
-}
-
-table.insert(aura_env.config.spells, new_table)
-
 local EntryInfo = {}
 EntryInfo.__index = EntryInfo
 function EntryInfo:new(config)
