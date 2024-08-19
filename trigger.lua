@@ -52,7 +52,7 @@ function(allstates, ...)
             local unit = UnitTokenFromGUID(state.guid)
             if unit then
                 local mark = GetRaidTargetIndex(unit)
-                state.mark = (mark and ICON_LIST[mark].."16|t") or ""
+                state.mark = mark and ICON_LIST[mark].."16|t" or ""
                 state.changed = true
             end
         end
