@@ -213,7 +213,6 @@ aura_env.handleSpellInterrupt = function(...)
         local spellInfo = entry:spellInfo()
         local barInfo = entry:barInfo()
         local duration = spellInfo.interruptCooldown -- this is different from other handlers!
-        print("cooldown should be: " .. duration)
         local newState = aura_env.addBar(barInfo, spellId, duration, sourceGuid, isActive, entry)
         return newState
     end
