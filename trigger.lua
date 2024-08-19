@@ -10,7 +10,7 @@ function(allstates, ...)
         return true
     end
 
-    if subEvent == "SPELL_CAST_START"  then
+    if subEvent == "SPELL_CAST_START" then
         local sourceGuid = select(5, ...) 
         local spellId = select(13, ...)
         local newState = aura_env.handleSpellCastStart(...)
@@ -20,11 +20,34 @@ function(allstates, ...)
         end
     end
 
-    if event == "UNIT_SPELLCAST_SUCCEEDED"  then
+
+    if subEvent == "SPELL_CAST_SUCCESS" then
+        local sourceGuid = select(5, ...) 
+        local spellId = select(13, ...)
+        local newState = aura_env.handleSpellCastStart(...)
+        if sourceGuid and newState then
+            allstates[sourceGuid..spellId] = newState
+            return true
+        end
+    end
+
+
+    if event == "UNIT_SPELLCAST_SUCCEEDED" then
         local unit = select(2, ...)
         local guid = UnitGUID(unit)
         local spellId = select(4, ...)
         local newState = aura_env.handleUnitSpellcastSucceeded(...)
+        if guid and newState then
+            allstates[guid..spellId] = newState
+            return true
+        end
+    end
+
+
+    if subEvent == "SPELL_INTERRUPT" then
+        local guid = select(9, ...)
+        local spellId = select(16, ...)
+        local newState = aura_env.handleSpellInterrupt(...)
         if guid and newState then
             allstates[guid..spellId] = newState
             return true

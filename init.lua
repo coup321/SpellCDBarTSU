@@ -27,6 +27,7 @@ function EntryInfo:spellInfo()
     info["spellId"] = tonumber(self.config.spellId)
     info["cdFromCombatStart"] = tonumber(self.config.cdFromCombatStart)
     info["cdAfterCast"] = tonumber(self.config.cdAfterCast)
+    info["interruptCooldown"] = tonumber(self.config.interruptCooldown)
     info["spellEventType"] = self.config.spellEventType
     return info
 end
@@ -64,14 +65,21 @@ end
 
 
 function EntryInfo:useSpellCastStart()
-    return self.config.spellEventType == 1 -- "SPELL_CAST_START"
+    return self.config.useSpellCastStart
 
+end
+
+function EntryInfo:useSpellCastSuccess()
+    return self.config.useSpellCastSuccess
 end
 
 function EntryInfo:useUnitSpellcastSucceeded()
-    return self.config.spellEventType == 2 -- UNIT_SPELLCAST_SUCCEEDED
+    return self.config.useUnitSpellcastSucceeded
 end
 
+function EntryInfo:useSpellInterrupt()
+    return self.config.useSpellInterrupt
+end
 
 function EntryInfo:roleOptions()
     return {
@@ -150,6 +158,26 @@ aura_env.handleSpellCastStart = function(...)
     return nil
 end
 
+aura_env.handleSpellCastSuccess = function(...)
+    local spellId = select(13, ...)
+    local sourceGuid = select(5, ...)
+    if aura_env.entries[spellId] then
+        local entry = aura_env.entries[spellId]
+
+        if not entry:useSpellCastSuccess() then
+            return nil
+        end
+
+        local isActive = entry:isActive()
+        local spellInfo = entry:spellInfo()
+        local barInfo = entry:barInfo()
+        local duration = spellInfo.cdAfterCast
+        local newState = aura_env.addBar(barInfo, spellId, duration, sourceGuid, isActive, entry)
+        return newState
+    end
+    return nil
+end
+
 aura_env.handleUnitSpellcastSucceeded = function(...)
     local unit = select(2, ...)
     local spellId = select(4, ...)
@@ -165,6 +193,27 @@ aura_env.handleUnitSpellcastSucceeded = function(...)
         local spellInfo = entry:spellInfo()
         local barInfo = entry:barInfo()
         local duration = spellInfo.cdAfterCast
+        local newState = aura_env.addBar(barInfo, spellId, duration, sourceGuid, isActive, entry)
+        return newState
+    end
+    return nil
+end
+
+aura_env.handleSpellInterrupt = function(...)
+    local sourceGuid = select(9, ...)
+    local spellId = select(16, ...)
+    if aura_env.entries[spellId] then
+        local entry = aura_env.entries[spellId]
+
+        if not entry:useSpellInterrupt() then
+            return nil
+        end
+
+        local isActive = entry:isActive()
+        local spellInfo = entry:spellInfo()
+        local barInfo = entry:barInfo()
+        local duration = spellInfo.interruptCooldown -- this is different from other handlers!
+        print("cooldown should be: " .. duration)
         local newState = aura_env.addBar(barInfo, spellId, duration, sourceGuid, isActive, entry)
         return newState
     end
