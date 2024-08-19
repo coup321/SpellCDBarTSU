@@ -1,3 +1,5 @@
+local GetSpellInfo = C_Spell and C_Spell.GetSpellInfo or GetSpellInfo
+
 local EntryInfo = {}
 EntryInfo.__index = EntryInfo
 function EntryInfo:new(config)
@@ -36,9 +38,10 @@ end
 
 function EntryInfo:barInfo()
     local iconSpellId = self.config.iconOverrideBool and tonumber(self.config.iconOverrideSpellId) or tonumber(self.config.spellId)
-    local spellName, _, _ = GetSpellInfo(self.config.spellId)
-    local _, _, icon = GetSpellInfo(iconSpellId)
+    local spellName = GetSpellInfo(self.config.spellId)["name"]
+    local  icon = GetSpellInfo(iconSpellId)["iconID"]
     local info = {}
+
     info["icon"] = icon
     info["text"] = self.config.customBarTextBool and self.config.customBarText or spellName
     info["category"] = self.config.category
@@ -109,7 +112,6 @@ aura_env.addBar = function(barInfo, spellId, duration, guid, isActive, entry)
     aura_env.activeBars[guid..spellId] = true
     local unit = UnitTokenFromGUID(guid)
     local mark = unit and GetRaidTargetIndex(unit) or nil
-
     local newState = {
         show = true,
         changed = true,
